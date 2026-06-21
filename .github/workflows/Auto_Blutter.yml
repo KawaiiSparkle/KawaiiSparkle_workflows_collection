@@ -11,7 +11,7 @@ on:
         description: 'blutter.py 额外参数 (如 --no-analysis --ida-fcn)'
         required: false
         type: string
-        default: '--ida-fcn'
+        default: ''
 
 permissions:
   contents: write
@@ -34,6 +34,7 @@ jobs:
       - name: Download APK
         run: |
           mkdir -p input output
+          chmod 777 output
           wget -O input/app.apk "${{ inputs.apk_url }}"
           echo "APK downloaded: $(ls -lh input/app.apk)"
 
