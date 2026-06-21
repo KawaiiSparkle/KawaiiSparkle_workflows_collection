@@ -11,7 +11,7 @@ on:
         description: 'blutter.py 额外参数 (如 --no-analysis --ida-fcn)'
         required: false
         type: string
-        default: ''
+        default: '--ida-fcn'
 
 permissions:
   contents: write
