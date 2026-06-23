@@ -1,0 +1,97 @@
+name: 手动触发编译 Hikari Novel plus arm64 APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: '选择软件分支'
+        required: true
+        type: choice
+        options:
+          - Xfire233/hikari_novel_flutter_plus
+          - 15dd/hikari_novel_flutter
+      version:
+        description: '发布版本号 (例如 v1.0.0，不填则默认使用构建编号)'
+        required: false
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Source Repository
+        run: |
+          if [ "${{ inputs.repo }}" = "Xfire233/hikari_novel_flutter_plus" ]; then
+            BRANCH="main"
+          else
+            BRANCH="develop"
+          fi
+          git clone -b "$BRANCH" "https://github.com/${{ inputs.repo }}.git" source
+          cd source
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.7'
+          channel: 'stable'
+
+      - name: 获取依赖包 (Pub Get)
+        run: |
+          cd source
+          flutter pub get
+
+      - name: 编译 Release APK (ARM64 + Obfuscation)
+        run: |
+          cd source
+          flutter build apk --release --target-platform android-arm64 --obfuscate --split-debug-info=build/app/outputs/symbols
+
+      - name: Rename APK (重命名安装包)
+        run: |
+          cd source
+          VERSION="${{ inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION="build-${{ github.run_number }}";
+          fi
+          mv build/app/outputs/flutter-apk/app-release.apk "build/app/outputs/flutter-apk/Hikari_Novel_arm64_${VERSION}.apk"
+
+      - name: Zip Debug Symbols (打包符号表)
+        run: |
+          cd source
+          zip -r debug-symbols.zip build/app/outputs/symbols
+
+      - name: Prepare Release Body
+        id: release_body
+        run: |
+          REPO="${{ inputs.repo }}"
+          if [ "$REPO" = "Xfire233/hikari_novel_flutter_plus" ]; then
+            BRANCH="main"
+          else
+            BRANCH="develop"
+          fi
+          echo "repo_branch=${REPO} (${BRANCH})" >> $GITHUB_OUTPUT
+          echo "build_time=$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+
+      - name: Publish to GitHub Releases (发布到 Releases)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "${{ inputs.version || format('build-{0}', github.run_number) }}"
+          name: "${{ inputs.version || format('Build #{0}', github.run_number) }}"
+          body: |
+            构建选择: ${{ steps.release_body.outputs.repo_branch }}
+            构建时间: ${{ steps.release_body.outputs.build_time }}
+            这是通过 GitHub Actions 自动构建的 ARM64 优化版 APK。
+          files: |
+            source/build/app/outputs/flutter-apk/Hikari_Novel_arm64_*.apk
+            source/debug-symbols.zip
